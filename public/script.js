@@ -81,7 +81,6 @@ signUpForm.addEventListener("submit" , (e)=> {
         email: email.value,
         password: newPassword.value
     }
-    console.log(user);
     registerUser(user);
 });
 
