@@ -8,6 +8,8 @@ const reportTableDiv = document.getElementById("reportTableDiv");
 const refreshLeadBoardBtn = document.createElement('button');
 refreshLeadBoardBtn.textContent = "Refresh LeaderBoard"
 const leaderboardContainer = document.querySelector('.leaderboard');
+const numberOfReports = document.getElementById("reportsPerPage");
+
 leaderBoardDiv.appendChild(refreshLeadBoardBtn);
 leaderBoardDiv.appendChild(leaderboardContainer);
 
@@ -55,7 +57,7 @@ startDateInput.addEventListener("change", ()=> {
     currentDate.setHours(0, 0, 0, 0);
 
     if (startDate > currentDate || startDate > endDate) {
-        startDateInput.value = ""; // Clear invalid start date
+        startDateInput.value = ""; 
         downloadBtn.disabled = true;
         return;
     }
@@ -70,7 +72,7 @@ endDateInput.addEventListener("change", ()=> {
     const endDate = new Date(endDateInput.value);
 
     if (endDate < startDate) {
-        endDateInput.value = ""; // Clear invalid end date
+        endDateInput.value = ""; 
         downloadBtn.disabled = true;
         return;
     }
@@ -98,14 +100,14 @@ downloadBtn.addEventListener("click", async ()=> {
     let csvContent = 'Amount,Description,Category,Date\n';
 
     filteredExpenses.forEach(expense => {
-        const date = new Date((expense.updatedAt));
+        const date = new Date((expense.createdAt));
         const formattedDate = date.toLocaleDateString('en-GB', { timeZone: 'UTC' });
         csvContent += `${expense.amount},${expense.desc},${expense.category},${formattedDate}\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     await uploadToS3(blob, reportFileName.value);
-    
+
     startDateInput.value = '';
     endDateInput.value = '';
 });
@@ -126,16 +128,12 @@ async function uploadToS3(file, fileName) {
 
         if (response.ok) {
             console.log('File uploaded to S3 successfully');
-            const url = response.url;
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${fileName}.csv`;
-            a.click();
+            const report = await response.json();
+            console.log("Response at S2 fnction =>",report);
             await fetchReports();
-            // Handle success
+            downloadReport(report.url, fileName);
           } else {
             console.error('Failed to upload file to S3');
-            // Handle failure
           }
     } catch (error) {
         console.log(error);
@@ -163,8 +161,15 @@ async function fetchReports() {
     }
 }
 
-const reportsPerPage = 1; // Set the number of reports to display per page
-let currentPage = 1;
+function downloadReport(reportUrl, fileName) {
+    const a = document.createElement('a');
+    a.href = reportUrl;
+    a.download = `${fileName}.csv`; 
+    a.click();
+}
+
+const reportsPerPage = 1;
+let currentPage=1;
 const reportsData = [];
 
 function displayReports(reports, pageNumber = 1) {
@@ -184,14 +189,15 @@ function displayReports(reports, pageNumber = 1) {
         row.appendChild(nameCell);
 
         const dateCell = document.createElement('td');
-        dateCell.textContent = report.generatedDate; // Replace with actual date
+        const date = new Date((report.generatedDate));
+        const formattedDate = date.toLocaleDateString('en-GB', { timeZone: 'UTC' });
+        dateCell.textContent = formattedDate; 
         row.appendChild(dateCell);
 
         const downloadCell = document.createElement('td');
         const downloadButton = document.createElement('button');
         downloadButton.textContent = 'Download';
         downloadButton.addEventListener('click', () => {
-            // Implement download logic for the corresponding report
             downloadReport(report.url, report.fileName);
         });
         downloadCell.appendChild(downloadButton);
@@ -199,44 +205,31 @@ function displayReports(reports, pageNumber = 1) {
 
         reportsTableBody.appendChild(row);
     });
+    currentPage = pageNumber;
+    updatePaginationButtons(reports);
 }
 
-function downloadReport(reportUrl, fileName) {
-    // Implement the logic to download the report using the provided URL
-    // For example:
-    const a = document.createElement('a');
-    a.href = reportUrl;
-    a.download = `${fileName}.csv`; // Set desired filename
-    a.click();
-}
-
-function updatePaginationButtons() {
+function updatePaginationButtons(reports) {
     const totalPages = Math.ceil(reports.length / reportsPerPage);
     document.getElementById('reportCurrentPage').textContent = `Page ${currentPage}`;
 
     const prevPageButton = document.getElementById('reportPrevPage');
     const nextPageButton = document.getElementById('reportNextPage');
 
-    if (currentPage === 1) {
-        prevPageButton.disabled = true;
-    } else {
-        prevPageButton.disabled = false;
-        prevPageButton.addEventListener('click', () => {
+    prevPageButton.disabled = currentPage === 1;
+    nextPageButton.disabled = currentPage === totalPages;
+
+    prevPageButton.addEventListener('click', () => {
+        if (currentPage > 1) {
             currentPage--;
-            displayReports(reportsData, currentPage);
-            updatePaginationButtons();
-        });
-    }
+            displayReports(reports, currentPage);
+        }
+    });
 
-    if (currentPage === totalPages) {
-        nextPageButton.disabled = true;
-    } else {
-        nextPageButton.disabled = false;
-        nextPageButton.addEventListener('click', () => {
+    nextPageButton.addEventListener('click', () => {
+        if (currentPage < totalPages) {
             currentPage++;
-            displayReports(reportsData, currentPage);
-            updatePaginationButtons();
-        });
-    }
+            displayReports(reports, currentPage);
+        }
+    });
 }
-
